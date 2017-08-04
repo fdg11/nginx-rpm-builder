@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+b=$(tput bold);
+n=$(tput sgr0);
+i=$(tput blink);
+clr=$(tput clear);
+c_blk=$( tput setaf 0 ) # Black
+c_red=$( tput setaf 1 ) # Red
+c_grn=$( tput setaf 2 ) # Green
+c_ylw=$( tput setaf 3 ) # Yellow
+c_blu=$( tput setaf 4 ) # Blue
+c_pur=$( tput setaf 5 ) # Purple
+c_cyn=$( tput setaf 6 ) # Cyan
+c_wht=$( tput setaf 7 ) # White
+
+###
+#function
+spinner(){
+echo -e "$c_grn It may take some time ... wait!$n";
+# While process is running...
+sp[0]="/";
+sp[1]="|";
+sp[2]="\\";
+sp[3]="-";
+echo -ne "$c_grn [Compile: $n";
+while kill -0 $1 2> /dev/null; do 
+for i in "${sp[@]}"
+do
+    echo -ne "\b$i";
+    sleep 0.1
+done
+echo -ne "\b|=";
+done
+echo -e "] $b$c_grn DONE!$n";
+}
+
+show_menu_b(){
+echo -e "$clr";
+echo -e "	";
+echo -e "$b$c_wht Nginx RPMbuilder menu:"
+echo -e "______________________________________________________$n";
+echo -e " You can choose one of these available build & install:\n";
+echo -e " 1.$c_pur ALPN+HTTPS/2$n";
+echo -e " 2.$c_pur ALPN+HTTPS/2+Brotli+ngx_pagespeed$n";
+echo -e " 3.$c_pur Install Let's Encrypt$n"
+echo -e " 0.$b$c_pur Exit$n\n";
+read -p "$b$c_grn What rpm version do you want to build?:$n " opt_b;
+}
+
+show_menu_ng(){
+#echo -e "$clr";
+echo -e "	";
+echo -e "$b$c_wht You can choose new release Nginx version 2017"
+echo -e "$n";
+echo -e " Proposed options:\n";
+ver_ng=$(curl -ls http://nginx.org/packages/mainline/centos/7/SRPMS/ | grep nginx-1. | awk '/-2017/ {print $2}' | cut -d"=" -f2 | cut -d">" -f2 | cut -d"<" -f1);
+i=1;
+for j in $ver_ng
+do
+echo -e " $i.$c_pur $j $n";
+arr2[$i]=$j;
+let i++;
+done
+echo -e " 0.$c_pur Next menu$n";
+read -p "$b$c_grn What version do you want to install?:$n " opt_ng;
+}
+
+show_menu_op(){
+#echo -e "$clr";
+echo -e "	";
+echo -e "$b$c_wht You can choose new release OpenSSL version"
+echo -e "$n";
+echo -e " Proposed options:\n";
+ver_ssl=$(curl -ls https://www.openssl.org/source/ | grep openssl-1.* | cut -d"=" -f2 | cut -d">" -f2 | cut -d"<" -f1);
+i=1;
+for j in $ver_ssl
+do
+echo -e " $i.$c_pur $j $n";
+arr1[$i]=$j;
+let i++;
+done
+echo -e " 0.$c_pur Next menu$n";
+read -p "$b$c_grn What version do you want to complit?:$n " opt_op;
+}
+
+header(){
+echo -e "$c_wht ______________________________________________________";
+echo -e " ******************************************************";
+echo -e "$b WELCOME to NGINX BUILDER!";
+echo -e " ******************************************************";
+echo -e " ------------------------------------------------------$n\n";
+sleep 2;
+}
+
+check(){
+echo -e " System check starts:\n";
+if [ $(whoami) != "root" ]; then
+echo -e "$c_red You must be root!\n";
+sleep 2;
+exit 1;
+else
+echo -e "$c_grn You are logged in as root$n\n";
+fi
+
+nameos=$(cat /etc/os-release | awk -F\" '/^ID=/ {print $2}');
+centos_ver=$(cat /etc/os-release | awk -F\" '/VERSION_ID/ {print $2}');
+
+if [ "$nameos" = "centos" ] && [ "$centos_ver" = "7" ]; then
+echo -e "$c_grn True version OS!$n\n";
+else
+echo -e "$c_red Oops!. This is not corect version$n\n";
+sleep 2;
+exit 1;
+fi
+
+wget -q --tries=3 --timeout=5 http://google.com
+if [ "$?" = "0" ]; then
+echo -e "$c_grn Internet access. Open!$n\n";
+else
+echo -e "$c_red Oops!. Internet access. Closed!$n\n";
+sleep 2;
+exit 1;
+fi
+sleep 3;
+}
+
+err_out(){
+if [ "$1" = "0" ]; then
+echo -e "$c_grn - No errors$n";
+else
+echo -e "$c_red - Something went wrong, restart the script$n";
+sleep 2;
+exit 1;
+fi
+}
+
+presets(){
+echo -e " The installation of additional components begins:\n";
+echo -e "$c_grn - mkdir -p /opt/lib$n";
+echo -e "$c_grn - installing Development Tools$n";
+echo -e "$c_grn - installing openssl-devel libxml2-devel libxslt-devel gd-devel perl-ExtUtils-Embed GeoIP-devel$n\n";
+
+mkdir -p /opt/lib &> /dev/null
+err0=$?;
+err_out $err0;
+yum groupinstall "Development Tools" &> /dev/null
+err1=$?;
+err_out $err1;
+yum -y install openssl-devel libxml2-devel libxslt-devel gd-devel perl-ExtUtils-Embed GeoIP-devel &> /dev/null
+err2=$?;
+err_out $err2;
+echo -e "\n";
+sleep 3;
+}
+
+###
+#Header
+header;
+
+###
+#Check
+check;
+
+###
+#Presets
+presets;
+
+###
+#menu
+
+while true;
+do
+show_menu_b;
+
+case "$opt_b" in
+0)
+    if [ "$opt_b" = "0" ]; then
+    break;
+    exit;
+    fi
+;;
+1)
+    # OpenSSL download
+    av_ssl=$(curl -Is https://www.openssl.org/source/ | grep HTTP | awk '{print $2}');
+    if [ "$av_ssl" = "200" ]; then
+        echo -e "$c_grn OpenSSL source availability for download$n";
+        
+        while true;
+        do
+        key1=0;
+        show_menu_op;
+	    for dir1 in ${!arr1[*]}
+	    do
+		if [ "$dir1" = "$opt_op" ]; then
+		    echo -e ${arr1[$dir1]};
+		    openssl_ver=${arr1[$dir1]};
+		    let key1=1;
+		    break;
+		fi
+	    done
+	    if [ "$key1" = "1" ]; then
+		echo -e "$c_grn$b Process Begin!$n";
+		# process
+		wget https://www.openssl.org/source/$openssl_ver -O /opt/lib/$openssl_ver
+		tar -zxvf /opt/lib/$openssl_ver -C /opt/lib &> /dev/null
+		err3=$?;
+		err_out $err3;
+		opssl=${openssl_ver/.tar.gz/};
+		break;
+	    else
+		if [ "$opt_op" != "0" ]; then
+		    echo -e "$c_red Enter corect options!$n";
+		else
+		    break;
+		fi
+	    fi
+	done
+    else
+        exit;
+    fi
+    
+    # nginx build
+    av_ng=$(curl -Is http://nginx.org/packages/mainline/centos/7/SRPMS/  | grep HTTP | awk '{print $2}');
+    if [ "$av_ng" = "200" ]; then
+        echo -e "$c_grn Nginx source availability for download$n";
+	while true;
+        do
+        key2=0;
+        show_menu_ng;                     
+            for dir2 in ${!arr2[*]}           
+            do                            
+    		if [ "$dir2" = "$opt_ng" ]; then
+                    echo -e ${arr2[$dir2]};   
+                    nginx_ver=${arr2[$dir2]};
+                    let key2=1;              
+                    break;                
+                fi
+            done
+            if [ "$key2" = "1" ]; then
+                echo -e "$c_grn$b Process Begin!$n";
+                # process
+        	rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/$nginx_ver 2> /dev/null 
+        	sed -i "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=/opt/lib/$opssl|g" /root/rpmbuild/SPECS/nginx.spec
+        	rpmbuild -ba /root/rpmbuild/SPECS/nginx.spec &> /dev/null & pid=$!;
+        	spinner $pid;
+        	break;
+            else
+        	if [ "$opt_ng" != "0" ]; then
+            	    echo -e "$c_red Enter corect options!$n";
+        	else
+            	    break;
+        	fi
+            fi
+        done
+    else
+	exit;
+    fi
+;;
+2)
+
+esac
+done
+exit
